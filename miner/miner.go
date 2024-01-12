@@ -59,22 +59,23 @@ func (m *Miner) Mining() {
 			Tags:      nil,
 		}
 		latestEventId := m.noss.GetLatestEventID()
+		latestNumber := strconv.Itoa(int(m.arb.LatestNumber()))
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"p", "9be107b0d7218c67b4954ee3e6bd9e4dba06ef937a93f684e42f730a0c3d053c"})
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"e", "51ed7939a984edee863bfbb2e66fdc80436b000a8ddca442d83e6a2bf1636a95", replayURL, "root"})
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"e", latestEventId, replayURL, "reply"})
-		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"seq_witness", strconv.Itoa(int(m.arb.LatestNumber())), m.arb.LatestHex()})
+		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"seq_witness", latestNumber, m.arb.LatestHex()})
 
 		if event, err := generate(ev, difficulty); err != nil {
 			continue
 		} else {
 			Try(func() {
-				m.postEvent(event, startTime, latestEventId)
+				m.postEvent(event, startTime, latestEventId, latestNumber)
 			})
 		}
 	}
 }
 
-func (m *Miner) postEvent(event *nostr.Event, startTime time.Time, latestEventId string) {
+func (m *Miner) postEvent(event *nostr.Event, startTime time.Time, latestEventId string, latestNumber string) {
 	_ = event.Sign(m.secretKey)
 
 	evNewInstance := EV{
@@ -113,15 +114,17 @@ func (m *Miner) postEvent(event *nostr.Event, startTime time.Time, latestEventId
 
 	spendTime := time.Since(startTime)
 
-	if m.noss.GetLatestEventID() == latestEventId {
-		// 发送请求
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			logrus.Errorf("Error sending request: %v", err)
-		}
-		defer resp.Body.Close()
+	if latestNumber == strconv.Itoa(int(m.arb.LatestNumber())) {
+		if m.noss.GetLatestEventID() == latestEventId {
+			// 发送请求
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				logrus.Errorf("Error sending request: %v", err)
+			}
+			defer resp.Body.Close()
 
-		logrus.Info("published to: ", event.ID, " Response Status: ", resp.Status, " time: ", spendTime)
+			logrus.Info("published to: ", event.ID, " Response Status: ", resp.Status, " time: ", spendTime)
+		}
 	}
 }
 

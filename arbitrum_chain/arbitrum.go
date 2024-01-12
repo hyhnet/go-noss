@@ -42,7 +42,7 @@ func (c *ArbitrumChain) ListenNewHeader() {
 			atomic.StoreUint64(&c.latestNumber, head.Number.Uint64())
 
 			atomic.StoreInt32(&c.ready, 1)
-			// logrus.Info("height: ", head.Number.Uint64())
+			// logrus.Debug("height: ", head.Number.Uint64())
 		}
 	}()
 }
