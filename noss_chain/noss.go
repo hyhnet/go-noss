@@ -29,6 +29,7 @@ func NewNossChain() *NossChain {
 func (c *NossChain) ListenEvent(listenFn ...func(event string)) {
 	event := &event{}
 	for {
+		// startTime := time.Now()
 		if err := c.conn.ReadJSON(event); err != nil {
 			logrus.Errorf("read: %s", err)
 			_ = c.conn.Close()
@@ -43,6 +44,9 @@ func (c *NossChain) ListenEvent(listenFn ...func(event string)) {
 		}
 
 		atomic.StoreInt32(&c.ready, 1)
+
+		// spendTime := time.Since(startTime)
+		// logrus.Info("eid: ", event.EventID, " time: ", spendTime)
 	}
 }
 

@@ -5,14 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	arbitrum "nostr/arbitrum_chain"
 	noss "nostr/noss_chain"
 	rander "nostr/pkg/rander"
 	"strconv"
 	"time"
+
+	"github.com/nbd-wtf/go-nostr"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -47,6 +48,7 @@ func NewMiner(arb *arbitrum.ArbitrumChain, noss *noss.NossChain, publicKey, secr
 
 func (m *Miner) Mining() {
 	for {
+		startTime := time.Now()
 		ev := &nostr.Event{
 			Content:   message,
 			CreatedAt: nostr.Now(),
@@ -56,20 +58,23 @@ func (m *Miner) Mining() {
 			Sig:       "",
 			Tags:      nil,
 		}
+		latestEventId := m.noss.GetLatestEventID()
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"p", "9be107b0d7218c67b4954ee3e6bd9e4dba06ef937a93f684e42f730a0c3d053c"})
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"e", "51ed7939a984edee863bfbb2e66fdc80436b000a8ddca442d83e6a2bf1636a95", replayURL, "root"})
-		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"e", m.noss.GetLatestEventID(), replayURL, "reply"})
+		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"e", latestEventId, replayURL, "reply"})
 		ev.Tags = ev.Tags.AppendUnique(nostr.Tag{"seq_witness", strconv.Itoa(int(m.arb.LatestNumber())), m.arb.LatestHex()})
 
 		if event, err := generate(ev, difficulty); err != nil {
 			continue
 		} else {
-			m.postEvent(event)
+			Try(func() {
+				m.postEvent(event, startTime, latestEventId)
+			})
 		}
 	}
 }
 
-func (m *Miner) postEvent(event *nostr.Event) {
+func (m *Miner) postEvent(event *nostr.Event, startTime time.Time, latestEventId string) {
 	_ = event.Sign(m.secretKey)
 
 	evNewInstance := EV{
@@ -106,14 +111,30 @@ func (m *Miner) postEvent(event *nostr.Event) {
 	req.Header.Set("Sec-fetch-mode", "cors")
 	req.Header.Set("Sec-fetch-site", "same-site")
 
-	// 发送请求
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logrus.Errorf("Error sending request: %v", err)
-	}
-	defer resp.Body.Close()
+	spendTime := time.Since(startTime)
 
-	logrus.Info("published to: ", event.ID, " Response Status: ", resp.Status)
+	if m.noss.GetLatestEventID() == latestEventId {
+		// 发送请求
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			logrus.Errorf("Error sending request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		logrus.Info("published to: ", event.ID, " Response Status: ", resp.Status, " time: ", spendTime)
+	}
+}
+
+func Try(f func()) {
+	defer func() {
+		if err := recover(); err != nil {
+			// 发生了panic，进行错误处理
+			logrus.Error("Caught error:", err)
+		}
+	}()
+
+	// 调用传入的函数
+	f()
 }
 
 var rand = rander.NewRander([]byte("abcdefghijklmnopqrstuvwxyz0123456789"))

@@ -3,10 +3,11 @@ package arbitrum_chain
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/sirupsen/logrus"
-	"sync/atomic"
 )
 
 type ArbitrumChain struct {
@@ -41,6 +42,7 @@ func (c *ArbitrumChain) ListenNewHeader() {
 			atomic.StoreUint64(&c.latestNumber, head.Number.Uint64())
 
 			atomic.StoreInt32(&c.ready, 1)
+			// logrus.Info("height: ", head.Number.Uint64())
 		}
 	}()
 }
